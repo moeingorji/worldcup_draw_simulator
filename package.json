@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "vite",
+    "prebuild": "node -e \"try{require('fs').chmodSync('node_modules/.bin/vite',0o755);}catch(e){}\"",
     "build": "vite build",
     "preview": "vite preview",
     "draw": "ts-node --project tsconfig.node.json runDraw.ts"
