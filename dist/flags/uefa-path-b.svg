@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="48" viewBox="0 0 64 48">
+  <rect width="64" height="48" rx="6" fill="#0b1224" />
+  <!-- Ukraine -->
+  <g transform="translate(6 6)">
+    <rect width="26" height="18" fill="#ffd700" />
+    <rect y="0" width="26" height="9" fill="#1e40af" />
+  </g>
+  <!-- Poland -->
+  <g transform="translate(32 6)">
+    <rect width="26" height="18" fill="#f8fafc" />
+    <rect y="9" width="26" height="9" fill="#e31b23" />
+  </g>
+  <!-- Albania -->
+  <g transform="translate(6 24)">
+    <rect width="26" height="18" fill="#e11d48" />
+    <path d="M8 10 l5 -6 l5 6 l-5 4 z" fill="#111827" />
+  </g>
+  <!-- Sweden -->
+  <g transform="translate(32 24)">
+    <rect width="26" height="18" fill="#1d4ed8" />
+    <rect x="10" width="4" height="18" fill="#fbbf24" />
+    <rect y="8" width="26" height="4" fill="#fbbf24" />
+  </g>
+</svg>

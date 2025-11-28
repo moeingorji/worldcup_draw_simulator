@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="48" viewBox="0 0 64 48">
+  <rect width="64" height="48" rx="6" fill="#0b1224" />
+  <!-- Denmark -->
+  <g transform="translate(6 6)">
+    <rect width="26" height="18" fill="#bf0d3e" />
+    <rect x="8" width="4" height="18" fill="#f8fafc" />
+    <rect y="7" width="26" height="4" fill="#f8fafc" />
+  </g>
+  <!-- Czech Republic -->
+  <g transform="translate(32 6)">
+    <rect width="26" height="18" fill="#f8fafc" />
+    <rect y="9" width="26" height="9" fill="#e31b23" />
+    <polygon points="0,0 12,9 0,18" fill="#0d47a1" />
+  </g>
+  <!-- Republic of Ireland -->
+  <g transform="translate(6 24)">
+    <rect width="26" height="18" fill="#fff" />
+    <rect width="8.67" height="18" fill="#2f9e44" />
+    <rect x="17.33" width="8.67" height="18" fill="#ff8c00" />
+  </g>
+  <!-- North Macedonia -->
+  <g transform="translate(32 24)">
+    <rect width="26" height="18" fill="#d90429" />
+    <circle cx="13" cy="9" r="4" fill="#fbbf24" />
+    <path d="M0 8 h26 v2 H0z" fill="#fbbf24" />
+    <path d="M12 0 h2 v18 h-2z" fill="#fbbf24" />
+  </g>
+</svg>

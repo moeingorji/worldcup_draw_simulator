@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="48" viewBox="0 0 64 48">
+  <rect width="64" height="48" rx="6" fill="#0b1224" />
+  <!-- Italy -->
+  <g transform="translate(6 6)">
+    <rect width="26" height="18" fill="#fff" />
+    <rect width="8.67" height="18" fill="#2f9e44" />
+    <rect x="17.33" width="8.67" height="18" fill="#e03131" />
+  </g>
+  <!-- Wales -->
+  <g transform="translate(32 6)">
+    <rect width="26" height="18" fill="#fff" />
+    <rect y="9" width="26" height="9" fill="#2f9e44" />
+    <path d="M6 12 L10 9 L14 12 L18 9 L20 12 L16 15 L20 18 L10 18 L6 15 Z" fill="#c1121f" opacity="0.9" />
+  </g>
+  <!-- Bosnia and Herzegovina -->
+  <g transform="translate(6 24)">
+    <rect width="26" height="18" fill="#1d4ed8" />
+    <polygon points="0,0 10,0 26,18 16,18" fill="#fbbf24" />
+    <g fill="#fff">
+      <circle cx="5" cy="4" r="1.2" />
+      <circle cx="9" cy="8" r="1.2" />
+      <circle cx="13" cy="12" r="1.2" />
+      <circle cx="17" cy="16" r="1.2" />
+    </g>
+  </g>
+  <!-- Northern Ireland -->
+  <g transform="translate(32 24)">
+    <rect width="26" height="18" fill="#fff" />
+    <rect x="11" width="4" height="18" fill="#d90429" />
+    <rect y="7" width="26" height="4" fill="#d90429" />
+    <circle cx="13" cy="9" r="4" fill="#d90429" />
+    <polygon points="13,4 15,6 13,8 11,6" fill="#fbbf24" />
+  </g>
+</svg>

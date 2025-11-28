@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "jsx": "preserve"
+  },
+  "include": ["runDraw.ts", "draw.ts", "teams.ts"]
+}

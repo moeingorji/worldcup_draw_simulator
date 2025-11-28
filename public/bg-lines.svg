@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a1410"/>
+      <stop offset="100%" stop-color="#0f0c09"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f9d976" stop-opacity="0.75"/>
+      <stop offset="100%" stop-color="#d8a812" stop-opacity="0.65"/>
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <g fill="none" stroke="url(#gold)" stroke-width="6" stroke-linecap="round" opacity="0.35">
+    <circle cx="350" cy="200" r="420"/>
+    <circle cx="1650" cy="180" r="520"/>
+    <circle cx="400" cy="980" r="520"/>
+    <circle cx="1500" cy="900" r="620"/>
+  </g>
+  <g fill="none" stroke="url(#gold)" stroke-width="3" opacity="0.22">
+    <circle cx="960" cy="540" r="680"/>
+    <circle cx="960" cy="540" r="820"/>
+  </g>
+  <g fill="none" stroke="url(#gold)" stroke-width="1.5" opacity="0.18">
+    <circle cx="120" cy="120" r="240"/>
+    <circle cx="1800" cy="200" r="260"/>
+  </g>
+</svg>

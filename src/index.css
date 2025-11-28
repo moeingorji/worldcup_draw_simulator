@@ -1,0 +1,98 @@
+@import url("https://cdn.jsdelivr.net/npm/vazir-font@33.1.0/dist/font-face.css");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply text-slate-800;
+  background: #0c0a07;
+  font-family: "Vazir", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.card {
+  @apply bg-white shadow-sm rounded-xl border border-slate-200;
+}
+
+.card-title {
+  @apply text-lg font-semibold text-slate-900;
+}
+
+.badge {
+  @apply inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 300ms ease-out forwards;
+}
+
+@keyframes flash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgba(251, 191, 36, 0);
+  }
+}
+
+.animate-flash {
+  animation: flash 0.8s ease-out;
+}
+
+@keyframes glow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.6);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgba(251, 191, 36, 0);
+  }
+}
+
+.animate-glow {
+  animation: glow 1.2s ease-out;
+}
+
+@keyframes slide-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-fade {
+  animation: slide-fade 350ms ease-out;
+}
+
+@keyframes spotlight-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-spotlight-pop {
+  animation: spotlight-pop 500ms ease-out;
+}
