@@ -686,8 +686,8 @@ const drawNextTeamSafe = (state: DrawState): SafeDrawResult | null => {
         // Lightweight global lookahead: prove the rest can be solved within a small budget.
         const { state: proof } = solveAllPotsWithBudget(
           tentative,
-          1200,
-          nowMs() + 120
+          5000,
+          nowMs() + 400
         );
         if (!proof) {
           continue;
