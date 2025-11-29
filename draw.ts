@@ -361,65 +361,41 @@ const getValidGroupsForTeam = (state: DrawState, team: Team): GroupId[] => {
     return baseAll.filter((g) => !needUefaGroups.includes(g));
   }
 
-  // Top-4 cluster locking: four clusters must each contain exactly one top-4.
-  const clusterIds = Array.from(
-    new Set(Object.values(SEMI_CLUSTER).filter((x): x is string => Boolean(x)))
-  );
-  const clustersWithTop4 = new Set<string>();
-  for (const gid of GROUP_IDS) {
-    const cluster = SEMI_CLUSTER[gid];
-    if (!cluster) continue;
-    const hasTop4 = state.groups[gid].slots.some((s) => s.team && isTop4(s.team));
-    if (hasTop4) clustersWithTop4.add(cluster);
-  }
-  const missingClusters = clusterIds.filter((c) => !clustersWithTop4.has(c));
-  const remainingTop4 = remaining.filter(isTop4).length;
-  const inMissing = (gid: GroupId) => {
-    const c = SEMI_CLUSTER[gid];
-    return c ? missingClusters.includes(c) : false;
-  };
-  const inCluster = (gid: GroupId) => Boolean(SEMI_CLUSTER[gid]);
-
-  if (missingClusters.length > remainingTop4) {
-    return [];
-  }
-
-  if (isTop4(team)) {
-    // Top-4 must stay within clusters and only in clusters that don't already have a top-4.
-    let candidates = baseAll.filter(
-      (g) => inCluster(g) && !clustersWithTop4.has(SEMI_CLUSTER[g] as string)
-    );
-    if (missingClusters.length === remainingTop4 && missingClusters.length > 0) {
-      candidates = candidates.filter(inMissing);
-    }
-    return candidates;
-  }
-
-  // Non top-4 (only pot 1 matters for cluster seeds): allow if enough cluster slots
-  // remain for the unplaced top-4. Block placing into a missing cluster only when it
-  // would consume the last open slot needed for remaining top-4 seeds.
-  if (team.pot === 1 && missingClusters.length > 0 && remainingTop4 > 0) {
-    // Count open position-1 slots per cluster.
-    const openSlotsPerCluster: Record<string, number> = {};
+  // Cluster rules for pot 1:
+  if (team.pot === 1) {
+    // Precompute cluster status.
+    const clusterTop4 = new Set<string>();
+    const clusterOpenSeeds: Record<string, number> = {};
     for (const gid of GROUP_IDS) {
       const cluster = SEMI_CLUSTER[gid];
       if (!cluster) continue;
       const slot1 = state.groups[gid].slots.find((s) => s.position === 1);
       if (!slot1?.team) {
-        openSlotsPerCluster[cluster] = (openSlotsPerCluster[cluster] ?? 0) + 1;
+        clusterOpenSeeds[cluster] = (clusterOpenSeeds[cluster] ?? 0) + 1;
       }
+      const hasTop4 = state.groups[gid].slots.some((s) => s.team && isTop4(s.team));
+      if (hasTop4) clusterTop4.add(cluster);
     }
 
+    if (isTop4(team)) {
+      return baseAll.filter((g) => {
+        const cluster = SEMI_CLUSTER[g];
+        if (!cluster) return false; // top-4 must stay in clusters
+        if (clusterTop4.has(cluster)) return false; // no second top-4 in cluster
+        return true;
+      });
+    }
+
+    // Non-top-4 pot1: do not consume the last open seed in a cluster that has no top-4 yet.
     return baseAll.filter((g) => {
       const cluster = SEMI_CLUSTER[g];
       if (!cluster) return true;
-      if (!missingClusters.includes(cluster)) return true;
-      const totalOpenMissing = missingClusters.reduce(
-        (sum, c) => sum + (openSlotsPerCluster[c] ?? 0),
-        0
-      );
-      const afterOpen = totalOpenMissing - 1; // placing this team consumes one slot in that cluster
-      return afterOpen >= remainingTop4;
+      const open = clusterOpenSeeds[cluster] ?? 0;
+      const hasTop = clusterTop4.has(cluster);
+      if (!hasTop && open <= 1) {
+        return false;
+      }
+      return true;
     });
   }
 
