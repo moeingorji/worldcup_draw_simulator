@@ -83,6 +83,22 @@ const HOST_ASSIGNMENTS: Record<string, GroupId> = {
   "United States": "D",
 };
 
+// Predefined slot for each pot per group (from provided draw pattern).
+const POSITION_BY_GROUP_POT: Record<GroupId, Record<PotNumber, 1 | 2 | 3 | 4>> = {
+  A: { 1: 1, 2: 3, 3: 2, 4: 4 },
+  B: { 1: 1, 2: 4, 3: 3, 4: 2 },
+  C: { 1: 1, 2: 2, 3: 4, 4: 3 },
+  D: { 1: 1, 2: 3, 3: 2, 4: 4 },
+  E: { 1: 1, 2: 4, 3: 3, 4: 2 },
+  F: { 1: 1, 2: 2, 3: 4, 4: 3 },
+  G: { 1: 1, 2: 3, 3: 2, 4: 4 },
+  H: { 1: 1, 2: 4, 3: 3, 4: 2 },
+  I: { 1: 1, 2: 2, 3: 4, 4: 3 },
+  J: { 1: 1, 2: 3, 3: 2, 4: 4 },
+  K: { 1: 1, 2: 4, 3: 3, 4: 2 },
+  L: { 1: 1, 2: 2, 3: 4, 4: 3 },
+};
+
 type PotPositions = 1 | (2 | 3 | 4)[];
 
 const NON_SEEDED_POSITIONS: (2 | 3 | 4)[] = [2, 3, 4];
@@ -147,37 +163,14 @@ const getConfedCounts = (group: Group): ConfedCounts => {
   return counts;
 };
 
-const hasAvailableSlotForPot = (group: Group, pot: PotNumber): boolean => {
-  const positions = POSITION_FOR_POT[pot];
-  if (isPotPositionsList(positions)) {
-    return positions.some(
-      (pos) => group.slots[pos - 1] && !group.slots[pos - 1].team
-    );
-  }
-  // Pot 1 always targets position 1.
-  const slot = group.slots[0];
+const hasAvailableSlotForPot = (groupId: GroupId, group: Group, pot: PotNumber): boolean => {
+  const pos = POSITION_BY_GROUP_POT[groupId][pot];
+  const slot = group.slots[pos - 1];
   return Boolean(slot && !slot.team);
 };
 
-const lowestOpenPositionForPot = (
-  group: Group,
-  pot: PotNumber
-): 1 | 2 | 3 | 4 => {
-  const positions = POSITION_FOR_POT[pot];
-  if (isPotPositionsList(positions)) {
-    const open = positions.find(
-      (pos) => group.slots[pos - 1] && !group.slots[pos - 1].team
-    );
-    if (open) {
-      return open;
-    }
-  }
-  // Pot 1 fallback.
-  if (group.slots[0] && !group.slots[0].team) {
-    return 1;
-  }
-  throw new Error(`No open slot available for pot ${pot} in group ${group.id}`);
-};
+const slotForGroupPot = (groupId: GroupId, pot: PotNumber): 1 | 2 | 3 | 4 =>
+  POSITION_BY_GROUP_POT[groupId][pot];
 
 const cloneGroupWithPlacement = (
   group: Group,
@@ -267,7 +260,7 @@ const initDrawState = (teams: Team[]): DrawState => {
  * would exceed limits in the current group.
  */
 const canPlaceTeamInGroup = (team: Team, group: Group): boolean => {
-  if (!hasAvailableSlotForPot(group, team.pot)) {
+  if (!hasAvailableSlotForPot(group.id, group, team.pot)) {
     return false;
   }
 
@@ -300,8 +293,64 @@ const canPlaceTeamInGroup = (team: Team, group: Group): boolean => {
   return false;
 };
 
+const findGroupOfRanking = (state: DrawState, rank: number): GroupId | undefined => {
+  for (const gid of GROUP_IDS) {
+    const g = state.groups[gid];
+    for (const slot of g.slots) {
+      if (slot.team?.ranking === rank) return gid;
+    }
+  }
+  return undefined;
+};
+
+const rankingPlacementAllowed = (state: DrawState, team: Team, groupId: GroupId): boolean => {
+  if (!team.ranking || team.ranking < 1 || team.ranking > 4) return true;
+  const targetPath = GROUP_PATHWAY[groupId];
+  const pairRank = team.ranking === 1 ? 2 : team.ranking === 2 ? 1 : team.ranking === 3 ? 4 : 3;
+  const pairGroup = findGroupOfRanking(state, pairRank);
+  if (!pairGroup) return true;
+  return GROUP_PATHWAY[pairGroup] !== targetPath;
+};
+
 const getValidGroupsForTeam = (state: DrawState, team: Team): GroupId[] =>
-  GROUP_IDS.filter((id) => canPlaceTeamInGroup(team, state.groups[id]));
+  GROUP_IDS.filter(
+    (id) => canPlaceTeamInGroup(team, state.groups[id]) && rankingPlacementAllowed(state, team, id)
+  );
+
+const remainingTeams = (state: DrawState): Team[] =>
+  [1, 2, 3, 4]
+    .map((p) => state.pots[p as PotNumber])
+    .reduce((acc, arr) => acc.concat(arr), [] as Team[]);
+
+/**
+ * Compute domains (possible groups) for all remaining teams and check feasibility:
+ * - every team has at least one possible group
+ * - simple Hall/pigeonhole: no more teams share an identical domain than its size
+ */
+const computeDomainsFeasible = (state: DrawState): { feasible: boolean; domains: Record<string, GroupId[]> } => {
+  const rem = remainingTeams(state);
+  const domainMap: Record<string, GroupId[]> = {};
+  const keyCount: Record<string, number> = {};
+
+  for (const t of rem) {
+    const domain = getValidGroupsForTeam(state, t);
+    if (domain.length === 0) {
+      return { feasible: false, domains: {} };
+    }
+    const key = domain.slice().sort().join(",");
+    domainMap[key] = domain;
+    keyCount[key] = (keyCount[key] ?? 0) + 1;
+  }
+
+  for (const key of Object.keys(keyCount)) {
+    const size = domainMap[key].length;
+    if (keyCount[key] > size) {
+      return { feasible: false, domains: domainMap };
+    }
+  }
+
+  return { feasible: true, domains: domainMap };
+};
 
 const placeTeam = (
   state: DrawState,
@@ -309,7 +358,7 @@ const placeTeam = (
   groupId: GroupId
 ): DrawState => {
   const group = state.groups[groupId];
-  const targetPosition = lowestOpenPositionForPot(group, team.pot);
+  const targetPosition = slotForGroupPot(groupId, team.pot);
   const updatedGroup = cloneGroupWithPlacement(group, team, targetPosition);
   const updatedGroups = { ...state.groups, [groupId]: updatedGroup };
   const updatedPots = removeTeamFromPot(state.pots, team);
@@ -351,11 +400,6 @@ const nowMs = (): number => Date.now();
 const isIcPathTeam = (team: Team) =>
   team.id.toLowerCase() === "ic-path-1" || team.id.toLowerCase() === "ic-path-2";
 
-const remainingTeams = (state: DrawState): Team[] =>
-  [1, 2, 3, 4]
-    .map((p) => state.pots[p as PotNumber])
-    .reduce((acc, arr) => acc.concat(arr), [] as Team[]);
-
 /**
  * Check if all remaining teams (across all pots) have at least one possible group
  * and ensure a simple pigeonhole condition: for any identical domain of size k,
@@ -391,6 +435,54 @@ const icTeamsHaveOptions = (state: DrawState): boolean => {
   for (const ic of icTeams) {
     const valid = getValidGroupsForTeam(state, ic);
     if (valid.length === 0) return false;
+  }
+  return true;
+};
+
+/**
+ * Bipartite matching (teams -> groups) for a single pot to ensure every remaining team
+ * in that pot can be placed in a distinct group. This catches "n teams with < n options"
+ * style deadlocks.
+ */
+const potMatchingFeasible = (state: DrawState, pot: PotNumber): boolean => {
+  const teams = state.pots[pot];
+  if (teams.length === 0) return true;
+
+  const availableGroups = GROUP_IDS.filter((gid) =>
+    hasAvailableSlotForPot(gid, state.groups[gid], pot)
+  );
+  if (teams.length > availableGroups.length) return false;
+
+  const domains = teams.map((t) => getValidGroupsForTeam(state, t));
+  const match: Partial<Record<GroupId, number>> = {};
+
+  const tryMatch = (idx: number, seen: Set<GroupId>): boolean => {
+    for (const gid of domains[idx]) {
+      if (seen.has(gid)) continue;
+      seen.add(gid);
+      const current = match[gid];
+      if (current === undefined || tryMatch(current, seen)) {
+        match[gid] = idx;
+        return true;
+      }
+    }
+    return false;
+  };
+
+  for (let i = 0; i < teams.length; i += 1) {
+    if (domains[i].length === 0) return false;
+    const seen = new Set<GroupId>();
+    if (!tryMatch(i, seen)) {
+      return false;
+    }
+  }
+  return true;
+};
+
+const allPotsMatchingFeasible = (state: DrawState): boolean => {
+  const pots: PotNumber[] = [1, 2, 3, 4];
+  for (const p of pots) {
+    if (!potMatchingFeasible(state, p)) return false;
   }
   return true;
 };
@@ -447,47 +539,10 @@ const solveAllPotsWithBudget = (
  * Pop the most recently placed team from the current pot, restoring it to the pot and
  * clearing its slot. Returns a new state or null if nothing to pop.
  */
-const popLastFromCurrentPot = (state: DrawState): DrawState | null => {
-  const idx = [...state.drawOrder]
-    .map((t, i) => ({ t, i }))
-    .reverse()
-    .find((x) => x.t.pot === state.currentPot)?.i;
-  if (idx === undefined) {
-    return null;
-  }
-  const team = state.drawOrder[idx];
-  let foundGroup: GroupId | undefined;
-  const updatedGroups = { ...state.groups };
-  for (const gid of Object.keys(updatedGroups) as GroupId[]) {
-    const g = updatedGroups[gid];
-    const newSlots = g.slots.map((slot) => {
-      if (slot.team?.id === team.id) {
-        foundGroup = gid;
-        return { ...slot, team: undefined };
-      }
-      return slot;
-    });
-    updatedGroups[gid] = { ...g, slots: newSlots };
-    if (foundGroup) break;
-  }
-  const updatedPots = {
-    ...state.pots,
-    [state.currentPot]: [...state.pots[state.currentPot], team],
-  };
-  const updatedDrawOrder = state.drawOrder.filter((_, i) => i !== idx);
-
-  return {
-    ...state,
-    groups: updatedGroups,
-    pots: updatedPots,
-    drawOrder: updatedDrawOrder,
-  };
-};
-
 /**
- * Safer draw step: tries to avoid dead ends by only accepting placements where
- * every remaining team in the current pot still has at least one valid group.
- * Additionally runs a bounded feasibility lookahead across remaining pots to avoid late dead ends.
+ * Safer draw step: draw a random team from the current pot, then place it in the first
+ * valid group (A→L) that keeps all remaining teams feasible (domains + IC + per-pot matching).
+ * No stack/pop fallback; if no placement works we signal a dead end (return null).
  */
 const drawNextTeamSafe = (state: DrawState): SafeDrawResult | null => {
   const currentPotTeams = state.pots[state.currentPot];
@@ -496,51 +551,26 @@ const drawNextTeamSafe = (state: DrawState): SafeDrawResult | null => {
   }
 
   const teamOrder = shuffle(currentPotTeams);
-  let adjusted = false;
 
   for (const team of teamOrder) {
-    const validGroups = shuffle(getValidGroupsForTeam(state, team));
+    const validGroups = getValidGroupsForTeam(state, team);
     for (const groupId of validGroups) {
       const tentative = placeTeam(state, team, groupId);
-      const remaining = tentative.pots[team.pot];
+      const remaining = remainingTeams(tentative);
       const allHaveRoom = remaining.every((t) => getValidGroupsForTeam(tentative, t).length > 0);
-      const future = solveAllPotsWithBudget(tentative, 120, nowMs() + 50);
       const icOk = icTeamsHaveOptions(tentative);
-      const domainsOk = domainsFeasible(tentative);
-      if (allHaveRoom && icOk && domainsOk && (future.state || future.exhausted)) {
-        // Adjusted if we skipped any candidate before finding this one.
-        adjusted = adjusted || validGroups[0] !== groupId || teamOrder[0].id !== team.id;
-        // Always return the single-step placement; lookahead is for validation only.
-        return { state: tentative, adjusted, team, group: groupId };
-      }
-      adjusted = true;
-    }
-  }
-
-  // Fallback: place the first team in any valid group (no deep lookahead) to avoid user-facing dead end.
-  const fallbackTeam = teamOrder[0];
-  if (fallbackTeam) {
-    const valid = getValidGroupsForTeam(state, fallbackTeam);
-    if (valid.length > 0) {
-      const tentative = placeTeam(state, fallbackTeam, valid[0]);
-      return { state: tentative, adjusted: true, team: fallbackTeam, group: valid[0] };
-    }
-    // Last resort: pop previously placed teams from this pot (stack-like) and try re-solving this pot only.
-    let backtracked: DrawState | null = state;
-    let pops = 0;
-    while (pops < state.drawOrder.length) {
-      backtracked = popLastFromCurrentPot(backtracked!);
-      if (!backtracked) break;
-      pops += 1;
-      const solved = solveCurrentPot(backtracked);
-      if (solved) {
-        const placed = solved.drawOrder[solved.drawOrder.length - 1] ?? fallbackTeam;
-        const placedGroup = (Object.keys(solved.groups) as GroupId[]).find((gid) =>
-          solved.groups[gid].slots.some((s) => s.team?.id === placed.id)
+      const matchingOk = allPotsMatchingFeasible(tentative);
+      if (allHaveRoom && icOk && matchingOk) {
+        // Lightweight global lookahead: prove the rest can be solved within a small budget.
+        const { state: proof } = solveAllPotsWithBudget(
+          tentative,
+          1200,
+          nowMs() + 120
         );
-        if (placedGroup) {
-          return { state: solved, adjusted: true, team: placed, group: placedGroup };
+        if (!proof) {
+          continue;
         }
+        return { state: tentative, adjusted: false, team, group: groupId };
       }
     }
   }

@@ -476,34 +476,7 @@ const App = () => {
   const handleDrawNext = () => {
     const result = drawNextTeamSafe(state);
     if (!result) {
-      // Try solving current pot or full backtracking without wiping earlier pots.
-      const solved =
-        reSolveCurrentPotAssignments(state) ||
-        solveCurrentPot(state) ||
-        solveAllPots(state);
-      if (solved) {
-        setState(solved);
-        setInfo("Auto-resolved remaining teams to avoid a dead end.");
-        setError(undefined);
-        applyCompletion(solved);
-        const drawn = solved.drawOrder[solved.drawOrder.length - 1];
-        if (drawn) {
-          const tgt = GROUP_ORDER.find((id) =>
-            solved.groups[id].slots.some((s) => s.team?.id === drawn.id)
-          );
-          handleDrawAnimation(drawn.id, tgt);
-          if (tgt) {
-            setSpotlight({ team: drawn, group: tgt });
-            if (spotlightTimeout.current) clearTimeout(spotlightTimeout.current);
-            spotlightTimeout.current = window.setTimeout(
-              () => setSpotlight(undefined),
-              SPOTLIGHT_MS
-            );
-          }
-        }
-        return;
-      }
-      setError("Dead end reached. Please use Reset or Simulate full draw.");
+      setError("Dead end reached. Please reset and try again.");
       return;
     }
     const next = result.state;
@@ -521,11 +494,7 @@ const App = () => {
     }
     setState(next);
     setError(undefined);
-    setInfo(
-      result.adjusted
-        ? `Placement auto-adjusted to avoid a dead end. ${drawnTeam.name} → Group ${result.group}.`
-        : undefined
-    );
+    setInfo(undefined);
     applyCompletion(next);
   };
 
@@ -539,29 +508,16 @@ const App = () => {
 
   const handleAuto = () => {
     let workingState = state;
-    let lastInfo: string | undefined;
     while (!isDrawComplete(workingState)) {
       const result = drawNextTeamSafe(workingState);
       if (!result) {
-        const solved =
-          reSolveCurrentPotAssignments(workingState) ||
-          solveCurrentPot(workingState) ||
-          solveAllPots(workingState);
-        if (solved) {
-          workingState = solved;
-          lastInfo = "Auto-resolved remaining teams to avoid a dead end.";
-          continue;
-        }
-        setError("Dead end reached during auto-draw. Reset or simulate.");
+        setError("Dead end reached during auto-draw. Reset and try again.");
         break;
       }
       workingState = result.state;
-      if (result.adjusted) {
-        lastInfo = `Placement auto-adjusted to avoid a dead end. ${result.team.name} → Group ${result.group}.`;
-      }
     }
     setState(workingState);
-    setInfo(lastInfo);
+    setInfo(undefined);
     const drawnTeam = workingState.drawOrder[workingState.drawOrder.length - 1];
     if (drawnTeam) {
       const targetGroup = GROUP_ORDER.find((id) =>
@@ -574,28 +530,15 @@ const App = () => {
 
   const handleAutoStep = async () => {
     let workingState = state;
-    let lastInfo: string | undefined;
     while (!isDrawComplete(workingState)) {
       let stepHadSpotlight = false;
       const prevLength = workingState.drawOrder.length;
       const result = drawNextTeamSafe(workingState);
       if (!result) {
-        const solved =
-          reSolveCurrentPotAssignments(workingState) ||
-          solveCurrentPot(workingState) ||
-          solveAllPots(workingState);
-        if (solved) {
-          workingState = solved;
-          lastInfo = "Auto-resolved remaining teams to avoid a dead end.";
-        } else {
-          setError("Dead end reached during auto step. Reset or use auto-draw.");
-          break;
-        }
+        setError("Dead end reached during auto step. Reset and try again.");
+        break;
       } else {
         workingState = result.state;
-        if (result.adjusted) {
-          lastInfo = `Placement auto-adjusted to avoid a dead end. ${result.team.name} → Group ${result.group}.`;
-        }
       }
 
       // Identify the newly placed team compared to previous draw length.
@@ -616,7 +559,7 @@ const App = () => {
         }
       }
       setState(workingState);
-      setInfo(lastInfo);
+      setInfo(undefined);
       setError(undefined);
       applyCompletion(workingState);
       if (isDrawComplete(workingState)) break;
