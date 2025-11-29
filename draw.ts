@@ -48,6 +48,24 @@ const GROUP_PATHWAY: Record<GroupId, Pathway> = {
   K: "SIDE2",
 };
 
+// Semi-final sub-sides for top-4 separation.
+// Semi 1: (E, I, F) vs (H, G)
+// Semi 2: (C, L) vs (J, K)
+const SEMI_CLUSTER: Partial<Record<GroupId, string>> = {
+  E: "S1A",
+  I: "S1A",
+  F: "S1A",
+  H: "S1B",
+  G: "S1B",
+  C: "S2A",
+  L: "S2A",
+  J: "S2B",
+  K: "S2B",
+};
+
+const isTop4 = (team: Team): boolean =>
+  typeof team.ranking === "number" && team.ranking >= 1 && team.ranking <= 4;
+
 interface Team {
   id: string;
   name: string;
@@ -309,13 +327,104 @@ const rankingPlacementAllowed = (state: DrawState, team: Team, groupId: GroupId)
   const pairRank = team.ranking === 1 ? 2 : team.ranking === 2 ? 1 : team.ranking === 3 ? 4 : 3;
   const pairGroup = findGroupOfRanking(state, pairRank);
   if (!pairGroup) return true;
-  return GROUP_PATHWAY[pairGroup] !== targetPath;
+  // Different pathway for (1,2) and (3,4)
+  if (GROUP_PATHWAY[pairGroup] === targetPath) return false;
+  // Also split across semi clusters for all top-4
+  const targetCluster = SEMI_CLUSTER[groupId];
+  const pairCluster = SEMI_CLUSTER[pairGroup];
+  if (targetCluster && pairCluster && targetCluster === pairCluster) return false;
+  return true;
 };
 
-const getValidGroupsForTeam = (state: DrawState, team: Team): GroupId[] =>
-  GROUP_IDS.filter(
+const isUefaCapable = (team: Team): boolean =>
+  (team.confed && team.confed === "UEFA") ||
+  (team.possibleConfeds && team.possibleConfeds.includes("UEFA"));
+
+const getValidGroupsForTeam = (state: DrawState, team: Team): GroupId[] => {
+  const baseAll = GROUP_IDS.filter(
     (id) => canPlaceTeamInGroup(team, state.groups[id]) && rankingPlacementAllowed(state, team, id)
   );
+
+  const remaining = remainingTeams(state);
+
+  // Forced UEFA distribution: if the number of UEFA-capable remaining teams equals
+  // the number of groups without a UEFA team, restrict UEFA-capable teams to only those groups.
+  const needUefaGroups = GROUP_IDS.filter((gid) => getConfedCounts(state.groups[gid]).UEFA === 0);
+  const remainingUefaCapable = remaining.filter(isUefaCapable).length;
+  if (needUefaGroups.length > remainingUefaCapable) {
+    return [];
+  }
+  if (needUefaGroups.length > 0 && needUefaGroups.length === remainingUefaCapable) {
+    if (isUefaCapable(team)) {
+      return baseAll.filter((g) => needUefaGroups.includes(g));
+    }
+    return baseAll.filter((g) => !needUefaGroups.includes(g));
+  }
+
+  // Top-4 cluster locking: four clusters must each contain exactly one top-4.
+  const clusterIds = Array.from(
+    new Set(Object.values(SEMI_CLUSTER).filter((x): x is string => Boolean(x)))
+  );
+  const clustersWithTop4 = new Set<string>();
+  for (const gid of GROUP_IDS) {
+    const cluster = SEMI_CLUSTER[gid];
+    if (!cluster) continue;
+    const hasTop4 = state.groups[gid].slots.some((s) => s.team && isTop4(s.team));
+    if (hasTop4) clustersWithTop4.add(cluster);
+  }
+  const missingClusters = clusterIds.filter((c) => !clustersWithTop4.has(c));
+  const remainingTop4 = remaining.filter(isTop4).length;
+  const inMissing = (gid: GroupId) => {
+    const c = SEMI_CLUSTER[gid];
+    return c ? missingClusters.includes(c) : false;
+  };
+  const inCluster = (gid: GroupId) => Boolean(SEMI_CLUSTER[gid]);
+
+  if (missingClusters.length > remainingTop4) {
+    return [];
+  }
+
+  if (isTop4(team)) {
+    // Top-4 must stay within clusters and only in clusters that don't already have a top-4.
+    let candidates = baseAll.filter(
+      (g) => inCluster(g) && !clustersWithTop4.has(SEMI_CLUSTER[g] as string)
+    );
+    if (missingClusters.length === remainingTop4 && missingClusters.length > 0) {
+      candidates = candidates.filter(inMissing);
+    }
+    return candidates;
+  }
+
+  // Non top-4 (only pot 1 matters for cluster seeds): allow if enough cluster slots
+  // remain for the unplaced top-4. Block placing into a missing cluster only when it
+  // would consume the last open slot needed for remaining top-4 seeds.
+  if (team.pot === 1 && missingClusters.length > 0 && remainingTop4 > 0) {
+    // Count open position-1 slots per cluster.
+    const openSlotsPerCluster: Record<string, number> = {};
+    for (const gid of GROUP_IDS) {
+      const cluster = SEMI_CLUSTER[gid];
+      if (!cluster) continue;
+      const slot1 = state.groups[gid].slots.find((s) => s.position === 1);
+      if (!slot1?.team) {
+        openSlotsPerCluster[cluster] = (openSlotsPerCluster[cluster] ?? 0) + 1;
+      }
+    }
+
+    return baseAll.filter((g) => {
+      const cluster = SEMI_CLUSTER[g];
+      if (!cluster) return true;
+      if (!missingClusters.includes(cluster)) return true;
+      const totalOpenMissing = missingClusters.reduce(
+        (sum, c) => sum + (openSlotsPerCluster[c] ?? 0),
+        0
+      );
+      const afterOpen = totalOpenMissing - 1; // placing this team consumes one slot in that cluster
+      return afterOpen >= remainingTop4;
+    });
+  }
+
+  return baseAll;
+};
 
 const remainingTeams = (state: DrawState): Team[] =>
   [1, 2, 3, 4]
@@ -487,6 +596,17 @@ const allPotsMatchingFeasible = (state: DrawState): boolean => {
   return true;
 };
 
+const completedGroupsHaveUefa = (state: DrawState): boolean => {
+  for (const gid of GROUP_IDS) {
+    const g = state.groups[gid];
+    const full = g.slots.every((s) => s.team);
+    if (full) {
+      if (getConfedCounts(g).UEFA < 1) return false;
+    }
+  }
+  return true;
+};
+
 /**
  * Bounded backtracking: tries to solve all remaining pots with a node budget.
  * Returns {state, exhausted}. If exhausted is true, we hit the budget or deadline before
@@ -542,7 +662,8 @@ const solveAllPotsWithBudget = (
 /**
  * Safer draw step: draw a random team from the current pot, then place it in the first
  * valid group (A→L) that keeps all remaining teams feasible (domains + IC + per-pot matching).
- * No stack/pop fallback; if no placement works we signal a dead end (return null).
+ * If no direct placement works, we solve the current pot and take only the next placement
+ * from that solution (no full auto-fill).
  */
 const drawNextTeamSafe = (state: DrawState): SafeDrawResult | null => {
   const currentPotTeams = state.pots[state.currentPot];
@@ -560,7 +681,8 @@ const drawNextTeamSafe = (state: DrawState): SafeDrawResult | null => {
       const allHaveRoom = remaining.every((t) => getValidGroupsForTeam(tentative, t).length > 0);
       const icOk = icTeamsHaveOptions(tentative);
       const matchingOk = allPotsMatchingFeasible(tentative);
-      if (allHaveRoom && icOk && matchingOk) {
+      const fullUefaOk = completedGroupsHaveUefa(tentative);
+      if (allHaveRoom && icOk && matchingOk && fullUefaOk) {
         // Lightweight global lookahead: prove the rest can be solved within a small budget.
         const { state: proof } = solveAllPotsWithBudget(
           tentative,
@@ -572,6 +694,33 @@ const drawNextTeamSafe = (state: DrawState): SafeDrawResult | null => {
         }
         return { state: tentative, adjusted: false, team, group: groupId };
       }
+    }
+  }
+
+  // Last resort: solve the current pot entirely. If solvable, accept that pot solution as-is.
+  const solvedPot = solveCurrentPot(state);
+  if (solvedPot) {
+    // Sanity: ensure global feasibility still holds.
+    const remaining = remainingTeams(solvedPot);
+    const allHaveRoom = remaining.every((t) => getValidGroupsForTeam(solvedPot, t).length > 0);
+    const icOk = icTeamsHaveOptions(solvedPot);
+    const matchingOk = allPotsMatchingFeasible(solvedPot);
+    const fullUefaOk = completedGroupsHaveUefa(solvedPot);
+    if (allHaveRoom && icOk && matchingOk && fullUefaOk) {
+      const newlyPlaced = solvedPot.drawOrder.find(
+        (t) => !state.drawOrder.some((d) => d.id === t.id)
+      );
+      const placedGroup = newlyPlaced
+        ? GROUP_IDS.find((gid) =>
+            solvedPot.groups[gid].slots.some((s) => s.team?.id === newlyPlaced.id)
+          )
+        : undefined;
+      return {
+        state: solvedPot,
+        adjusted: true,
+        team: newlyPlaced ?? currentPotTeams[0],
+        group: placedGroup ?? GROUP_IDS[0],
+      };
     }
   }
 
@@ -785,7 +934,45 @@ const validateGlobalConstraints = (
     return GROUP_PATHWAY[g1] !== GROUP_PATHWAY[g2];
   };
 
-  return ensureDifferentPath(1, 2) && ensureDifferentPath(3, 4);
+  const ensureDifferentCluster = (r1: number, r2: number): boolean => {
+    const g1 = rankingLocations[r1];
+    const g2 = rankingLocations[r2];
+    if (!g1 || !g2) return false;
+    const c1 = SEMI_CLUSTER[g1];
+    const c2 = SEMI_CLUSTER[g2];
+    if (!c1 || !c2) return true;
+    return c1 !== c2;
+  };
+
+  const clusterCounts: Record<string, number> = {};
+  Object.values(SEMI_CLUSTER).forEach((c) => {
+    if (c) clusterCounts[c] = 0;
+  });
+  for (const gid of GROUP_IDS) {
+    const cluster = SEMI_CLUSTER[gid];
+    if (!cluster) continue;
+    groupLoop: for (const slot of groups[gid].slots) {
+      if (slot.team && isTop4(slot.team)) {
+        clusterCounts[cluster] = (clusterCounts[cluster] ?? 0) + 1;
+        break groupLoop;
+      }
+    }
+  }
+  const allClustersHaveOne =
+    Object.keys(clusterCounts).length > 0 &&
+    Object.values(clusterCounts).every((c) => c === 1);
+
+  return (
+    ensureDifferentPath(1, 2) &&
+    ensureDifferentPath(3, 4) &&
+    ensureDifferentCluster(1, 2) &&
+    ensureDifferentCluster(1, 3) &&
+    ensureDifferentCluster(1, 4) &&
+    ensureDifferentCluster(2, 3) &&
+    ensureDifferentCluster(2, 4) &&
+    ensureDifferentCluster(3, 4) &&
+    allClustersHaveOne
+  );
 };
 
 const simulateFullDraw = (teams: Team[], maxRetries = 1000): DrawState => {
